@@ -158,7 +158,7 @@
             gap: 1rem;
             opacity: 0; /* Start hidden */
             visibility: hidden; /* Start hidden */
-            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out; /* Smooth transition */
+            transition: opacity 0.3s ease-in-out; /* Smooth transition */
         }
         .loading-overlay.visible {
             opacity: 1;
@@ -291,7 +291,12 @@
         }
 
         function hideLoading() {
-            loadingOverlay.classList.remove('visible');
+            // Wait for the transition to complete before setting display: none
+            loadingOverlay.addEventListener('transitionend', function handler() {
+                loadingOverlay.classList.remove('visible');
+                loadingOverlay.removeEventListener('transitionend', handler);
+            }, { once: true });
+            loadingOverlay.style.opacity = '0'; // Start fade out
         }
 
         // --- Tab Switching Logic ---
@@ -322,19 +327,17 @@
                 return;
             }
 
-            // Generate a unique email for Firebase Auth based on name and a timestamp
             const email = `${name.toLowerCase().replace(/\s+/g, '')}-${Date.now()}@supportapp.com`;
             console.log(`[User] Registering with generated email: ${email}`);
 
             try {
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
-                // Store user's name and the email used for Firebase Auth in the Realtime Database
                 await set(ref(database, `chats/${user.uid}/userName`), name);
-                await set(ref(database, `chats/${user.uid}/authEmail`), email); // Store email for login lookup
+                await set(ref(database, `chats/${user.uid}/authEmail`), email);
                 
                 console.log("[User] Registration successful. UID:", user.uid, "Name:", name);
-                // showMessageBox('Registration successful! You are now logged in.'); // Handled by onAuthStateChanged
+                showMessageBox('Registration successful! You are now logged in.');
             } catch (error) {
                 console.error("[User] Registration error:", error);
                 let errorMessage = 'Registration failed. Please try again.';
@@ -363,15 +366,14 @@
 
             let foundEmail = null;
             try {
-                // Query the database to find the email associated with this name.
                 const chatsRef = ref(database, 'chats');
-                const snapshot = await get(chatsRef); // Use get() for a one-time fetch
+                const snapshot = await get(chatsRef);
                 if (snapshot.exists()) {
                     snapshot.forEach(childSnapshot => {
                         const userData = childSnapshot.val();
                         if (userData.userName === name && userData.authEmail) {
                             foundEmail = userData.authEmail;
-                            return true; // Break forEach loop
+                            return true;
                         }
                     });
                 }
@@ -385,7 +387,7 @@
                 console.log(`[User] Attempting login for user '${name}' with found email: ${foundEmail}`);
                 await signInWithEmailAndPassword(auth, foundEmail, password);
                 console.log("[User] Login successful.");
-                // showMessageBox('Login successful!'); // Handled by onAuthStateChanged
+                showMessageBox('Login successful!');
             } catch (error) {
                 console.error("[User] Login error:", error);
                 let errorMessage = 'Login failed. Please check your name and password.';
@@ -401,7 +403,7 @@
         logoutButton.addEventListener('click', async () => {
             try {
                 if (unsubscribeUserChatListener) {
-                    unsubscribeUserChatListener(); // Unsubscribe from current chat listener
+                    unsubscribeUserChatListener();
                     unsubscribeUserChatListener = null;
                 }
                 await signOut(auth);
@@ -420,14 +422,13 @@
 
             if (messageText && currentUserId && currentUserName) {
                 try {
-                    // Push message to the user's chat path
                     await push(ref(database, `chats/${currentUserId}/messages`), {
-                        sender: currentUserId, // Sender is the user's UID
-                        senderName: currentUserName, // Store sender's name for admin to see
+                        sender: currentUserId,
+                        senderName: currentUserName,
                         text: messageText,
                         timestamp: serverTimestamp()
                     });
-                    messageInput.value = ''; // Clear input
+                    messageInput.value = '';
                     console.log("[User] Message sent successfully.");
                 } catch (error) {
                     console.error("[User] Error sending message:", error);
@@ -451,17 +452,13 @@
             const messageElement = document.createElement('div');
             messageElement.classList.add('message-bubble');
 
-            // Determine if the message is from the current user or admin
-            // Admin messages will have senderName as "Admin" and sender as admin's UID (set in admin.html)
-            // User messages will have sender as currentUserId
             if (message.sender === currentUserId) {
                 messageElement.classList.add('user');
-            } else { // This implies it's an admin message
+            } else {
                 messageElement.classList.add('admin');
             }
             messageElement.textContent = message.text;
             messagesContainer.appendChild(messageElement);
-            // Scroll to the latest message
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
 
@@ -471,7 +468,6 @@
                 currentUserId = user.uid;
                 console.log("[User] onAuthStateChanged: User is logged in. UID:", user.uid);
 
-                // Fetch user's name from the database (one-time fetch)
                 const userNameRef = ref(database, `chats/${user.uid}/userName`);
                 const nameSnapshot = await get(userNameRef);
                 if (nameSnapshot.exists()) {
@@ -479,25 +475,23 @@
                     userNameDisplay.textContent = `Chat with Admin (${currentUserName})`;
                     console.log("[User] User name fetched:", currentUserName);
                 } else {
-                    currentUserName = 'Unknown User'; // Fallback
+                    currentUserName = 'Unknown User';
                     userNameDisplay.textContent = `Chat with Admin`;
                     console.warn("[User] User name not found in database for UID:", user.uid);
                 }
 
                 authSection.classList.add('hidden');
                 chatSection.classList.remove('hidden');
-                messagesContainer.innerHTML = ''; // Clear previous messages
+                messagesContainer.innerHTML = '';
 
-                // Unsubscribe previous listener if exists before attaching new one
                 if (unsubscribeUserChatListener) {
                     unsubscribeUserChatListener();
                 }
 
-                // Listen for messages in this user's chat
                 const userChatRef = ref(database, `chats/${currentUserId}/messages`);
                 unsubscribeUserChatListener = onValue(userChatRef, (snapshot) => {
                     console.log("[User] New messages snapshot received for user chat:", currentUserId);
-                    messagesContainer.innerHTML = ''; // Clear existing messages before re-rendering
+                    messagesContainer.innerHTML = '';
                     snapshot.forEach((childSnapshot) => {
                         const message = childSnapshot.val();
                         displayMessage(message);
@@ -510,7 +504,6 @@
             } else {
                 currentUserId = null;
                 currentUserName = null;
-                // Unsubscribe when user logs out
                 if (unsubscribeUserChatListener) {
                     unsubscribeUserChatListener();
                     unsubscribeUserChatListener = null;
