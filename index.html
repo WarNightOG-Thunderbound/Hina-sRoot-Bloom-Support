@@ -156,6 +156,13 @@
             z-index: 1001;
             flex-direction: column;
             gap: 1rem;
+            opacity: 0; /* Start hidden */
+            visibility: hidden; /* Start hidden */
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out; /* Smooth transition */
+        }
+        .loading-overlay.visible {
+            opacity: 1;
+            visibility: visible;
         }
         .spinner {
             border: 4px solid rgba(0, 0, 0, 0.1);
@@ -210,7 +217,7 @@
         </div>
     </div>
 
-    <div id="loading-overlay" class="loading-overlay hidden">
+    <div id="loading-overlay" class="loading-overlay">
         <div class="spinner"></div>
         <p class="text-gray-700 font-semibold">Loading...</p>
     </div>
@@ -280,11 +287,11 @@
 
         // --- Loading Overlay Utility ---
         function showLoading() {
-            loadingOverlay.classList.remove('hidden');
+            loadingOverlay.classList.add('visible');
         }
 
         function hideLoading() {
-            loadingOverlay.classList.add('hidden');
+            loadingOverlay.classList.remove('visible');
         }
 
         // --- Tab Switching Logic ---
@@ -327,7 +334,7 @@
                 await set(ref(database, `chats/${user.uid}/authEmail`), email); // Store email for login lookup
                 
                 console.log("[User] Registration successful. UID:", user.uid, "Name:", name);
-                showMessageBox('Registration successful! You are now logged in.'); // Show message after loading
+                // showMessageBox('Registration successful! You are now logged in.'); // Handled by onAuthStateChanged
             } catch (error) {
                 console.error("[User] Registration error:", error);
                 let errorMessage = 'Registration failed. Please try again.';
@@ -338,7 +345,7 @@
                 }
                 showMessageBox(errorMessage, 'error');
             } finally {
-                setTimeout(hideLoading, 3000); // Fake loading for 3 seconds
+                setTimeout(hideLoading, 2000); // Fake loading for 2 seconds
             }
         });
 
@@ -357,7 +364,6 @@
             let foundEmail = null;
             try {
                 // Query the database to find the email associated with this name.
-                // This assumes names are unique enough for login purposes.
                 const chatsRef = ref(database, 'chats');
                 const snapshot = await get(chatsRef); // Use get() for a one-time fetch
                 if (snapshot.exists()) {
@@ -379,7 +385,7 @@
                 console.log(`[User] Attempting login for user '${name}' with found email: ${foundEmail}`);
                 await signInWithEmailAndPassword(auth, foundEmail, password);
                 console.log("[User] Login successful.");
-                showMessageBox('Login successful!'); // Show message after loading
+                // showMessageBox('Login successful!'); // Handled by onAuthStateChanged
             } catch (error) {
                 console.error("[User] Login error:", error);
                 let errorMessage = 'Login failed. Please check your name and password.';
@@ -388,7 +394,7 @@
                 }
                 showMessageBox(errorMessage, 'error');
             } finally {
-                setTimeout(hideLoading, 3000); // Fake loading for 3 seconds
+                setTimeout(hideLoading, 2000); // Fake loading for 2 seconds
             }
         });
 
